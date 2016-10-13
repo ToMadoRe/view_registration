@@ -7,20 +7,76 @@
 #include <tf_conversions/tf_eigen.h>
 #include <boost/log/trivial.hpp>
 
-typedef pcl::PointXYZRGB PointType;
-typedef pcl::PointCloud<PointType> Cloud;
-typedef typename Cloud::Ptr CloudPtr;
 
-using namespace std;
+#include <boost/algorithm/string.hpp>
+#define BOOST_NO_CXX11_SCOPED_ENUMS
+#include <boost/filesystem.hpp>
+#undef BOOST_NO_CXX11_SCOPED_ENUMS
+#include <boost/regex.hpp>
+
+namespace bf = boost::filesystem;
+
+namespace io
+{
+bool
+existsFolder ( const std::string &rFolder )
+{
+    bf::path dir = rFolder;
+    return bf::exists (dir);
+}
+
+std::vector<std::string>
+getFilesInDirectory (const std::string &dir,
+                     const std::string &regex_pattern,
+                     bool recursive)
+{
+    std::vector<std::string> relative_paths;
+
+    if ( !existsFolder( dir ) ) {
+        std::cerr << dir << " is not a directory!" << std::endl;
+    }
+    else
+    {
+        bf::path bf_dir  = dir;
+        bf::directory_iterator end_itr;
+        for (bf::directory_iterator itr ( bf_dir ); itr != end_itr; ++itr)
+        {
+            const std::string file = itr->path().filename().string ();
+
+            //check if its a directory, then get files in it
+            if (bf::is_directory (*itr))
+            {
+                if (recursive)
+                {
+                    std::vector<std::string> files_in_subfolder  = getFilesInDirectory ( dir + "/" + file, regex_pattern, recursive);
+                    for (const auto &sub_file : files_in_subfolder)
+                        relative_paths.push_back( file + "/" + sub_file );
+                }
+            }
+            else
+            {
+                //check for correct file pattern (extension,..) and then add, otherwise ignore..
+                boost::smatch what;
+                const boost::regex file_filter( regex_pattern );
+                if( boost::regex_match( file, what, file_filter ) )
+                    relative_paths.push_back ( file);
+            }
+        }
+        std::sort(relative_paths.begin(), relative_paths.end());
+    }
+    return relative_paths;
+}
+}
 
 int main(int argc, char** argv)
 {
-    google::InitGoogleLogging(argv[0]);
-    string folder;
+    typedef pcl::PointXYZRGB PointT;
+    std::string folder;
 
-    if (argc > 1){
+    if (argc > 1)
         folder = argv[1];
-    } else {
+    else
+    {
         cout <<"Please provide folder with clouds"<<endl;
         return -1;
     }
@@ -31,49 +87,30 @@ int main(int argc, char** argv)
 
 
     // get input clouds
-    vector<CloudPtr> input_clouds;
-    boost::filesystem::recursive_directory_iterator it2(folder);
-    boost::filesystem::recursive_directory_iterator endit;
-    int pcd_counter = 0;
-    std::string ext = ".pcd";
-    while (it2 != endit){
-        if(boost::filesystem::is_regular_file(*it2) && it2->path().extension() == ext){
-           pcd_counter++;
-           // load cloud
-           boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> > new_cloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB>);
-           pcl::io::loadPCDFile(it2->path().string().c_str(), *new_cloud);
-           input_clouds.push_back(new_cloud);
-        }
-        ++it2;
+    std::vector<std::string> cloud_fns = io::getFilesInDirectory( folder, ".*.pcd", false );
+    std::vector<pcl::PointCloud<PointT>::Ptr > input_clouds (cloud_fns.size());
+    for(size_t i=0; i<cloud_fns.size(); i++)
+    {
+        input_clouds[i].reset (new pcl::PointCloud<PointT>);
+        pcl::io::loadPCDFile( folder + "/" + cloud_fns[i], *input_clouds[i]);
     }
-    if (pcd_counter > 0){
-        cout<<"In data folder "<<folder <<" I found "<<pcd_counter<<" pcd files "<<endl;
-    }
-
-    // visualize
-    for (int i=0; i<input_clouds.size();++i){
-        stringstream ss; ss<<"Cloud"<<i;
-        pg->addPointCloud(input_clouds[i], ss.str());
-    }
-    pg->spin();
-    pg->removeAllPointClouds();
 
     // register!!
     bool verbose = true;
     std::vector<tf::StampedTransform> empty_transforms;
     std::vector<int> number_of_constraints;
     std::vector<tf::Transform> registered_poses;
-    AdditionalViewRegistrationOptimizer optimizer(verbose);
+    AdditionalViewRegistrationOptimizer<PointT> optimizer(verbose);
     optimizer.registerViews(input_clouds, empty_transforms,
                             number_of_constraints, registered_poses);
 
     // visualize registered data
     for (size_t i=0; i<input_clouds.size();i++){
-        CloudPtr transformedCloud(new Cloud);
+        pcl::PointCloud<PointT>::Ptr transformedCloud(new pcl::PointCloud<PointT>);
         *transformedCloud = *input_clouds[i];
         pcl_ros::transformPointCloud(*transformedCloud, *transformedCloud,registered_poses[i]);
 
-        stringstream ss; ss<<"Cloud";ss<<i;
+        std::stringstream ss; ss<<"Cloud";ss<<i;
         pg->addPointCloud(transformedCloud, ss.str());
     }
 
