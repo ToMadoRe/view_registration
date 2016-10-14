@@ -3,11 +3,11 @@ project(additional_view_registration_server)
 
 set(CMAKE_CXX_FLAGS "-O4 -fPIC -std=c++0x -fpermissive ${CMAKE_CXX_FLAGS}")
 
-find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs geometry_msgs sensor_msgs tf pcl_ros siftgpu qt_build)
+find_package(catkin REQUIRED COMPONENTS roscpp rospy siftgpu qt_build)
 
 catkin_package(
    INCLUDE_DIRS 
-   CATKIN_DEPENDS std_msgs geometry_msgs sensor_msgs pcl_ros siftgpu
+   CATKIN_DEPENDS siftgpu
    DEPENDS libceres-dev suitesparse qt_build libqt4-dev
    LIBRARIES additional_view_registration_optimizer
 )
@@ -35,8 +35,7 @@ add_library(additional_view_registration_optimizer include/additional_view_regis
                                                src/additional_view_registration_optimizer.cpp
                                                src/sift_wrapper.cpp)                                                                                      
 
-target_link_libraries(additional_view_registration_optimizer ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${QT_LIBRARIES} ${CERES_LIBRARIES}
-)
+target_link_libraries(additional_view_registration_optimizer ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${QT_LIBRARIES} ${CERES_LIBRARIES})
 
 add_executable(test_registration src/test_registration.cpp)
 

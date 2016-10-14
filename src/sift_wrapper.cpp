@@ -52,14 +52,11 @@ void SIFTWrapper::extractSIFT(const cv::Mat& image, int& num_desc, std::vector<f
 }
 
 
-void SIFTWrapper::matchSIFT(const int& num_desc1, const int& num_desc2,
+void SIFTWrapper::matchSIFT(int num_desc1, int num_desc2,
                const std::vector<float>& desc1, const std::vector<float>& desc2,
                const std::vector<SiftGPU::SiftKeypoint>& keypoints1, const std::vector<SiftGPU::SiftKeypoint>& keypoints2,
                std::vector<std::pair<SiftGPU::SiftKeypoint, SiftGPU::SiftKeypoint>>& matches)
 {
-    using namespace std;
-    using namespace cv;
-
     matcher->SetDescriptors(0, num_desc1, &desc1[0]); //image 1
     matcher->SetDescriptors(1, num_desc2, &desc2[0]); //image 2
 
@@ -68,16 +65,14 @@ void SIFTWrapper::matchSIFT(const int& num_desc1, const int& num_desc2,
 
 //        int num_match = matcher->GetSiftMatch(num1, match_buf,0.75, 0.8, 1);
     int num_match = matcher->GetSiftMatch(num_desc1, match_buf,0.5, 0.95, 1);
-//    std::cout << num_match << " sift matches were found;\n";
 
-
-    for(int j = 0; j < num_match; ++j)
+    matches.resize(num_match);
+    for(int j = 0; j < num_match; j++)
     {
         //How to get the feature matches:
-        SiftGPU::SiftKeypoint  key1 = keypoints1[match_buf[j][0]];
-        SiftGPU::SiftKeypoint  key2 = keypoints2[match_buf[j][1]];
-
-        matches.push_back(pair<SiftGPU::SiftKeypoint, SiftGPU::SiftKeypoint>(key1, key2));
+        const SiftGPU::SiftKeypoint &key1 = keypoints1[match_buf[j][0]];
+        const SiftGPU::SiftKeypoint &key2 = keypoints2[match_buf[j][1]];
+        matches[j] = std::pair<SiftGPU::SiftKeypoint, SiftGPU::SiftKeypoint>(key1, key2);
     }
 
     delete match_buf;

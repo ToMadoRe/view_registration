@@ -3,10 +3,9 @@
 #include "additional_view_registration_server/additional_view_registration_optimizer.h"
 
 #include <pcl/io/pcd_io.h>
+#include <pcl/common/transforms.h>
 #include <pcl/visualization/pcl_visualizer.h>
-#include <tf_conversions/tf_eigen.h>
 #include <boost/log/trivial.hpp>
-
 
 #include <boost/algorithm/string.hpp>
 #define BOOST_NO_CXX11_SCOPED_ENUMS
@@ -81,10 +80,6 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    pcl::visualization::PCLVisualizer* pg;
-    pg = new pcl::visualization::PCLVisualizer (argc, argv, "global_transform");
-    pg->setBackgroundColor(255,255,255);
-
 
     // get input clouds
     std::vector<std::string> cloud_fns = io::getFilesInDirectory( folder, ".*.pcd", false );
@@ -97,23 +92,22 @@ int main(int argc, char** argv)
 
     // register!!
     bool verbose = true;
-    std::vector<tf::StampedTransform> empty_transforms;
+    std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > empty_transforms;
     std::vector<int> number_of_constraints;
-    std::vector<tf::Transform> registered_poses;
-    AdditionalViewRegistrationOptimizer<PointT> optimizer(verbose);
-    optimizer.registerViews(input_clouds, empty_transforms,
-                            number_of_constraints, registered_poses);
+    std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > registered_poses;
+    ViewRegister<PointT> optimizer(verbose);
+    optimizer.registerViews(input_clouds, empty_transforms, number_of_constraints, registered_poses);
 
     // visualize registered data
-    for (size_t i=0; i<input_clouds.size();i++){
+    pcl::visualization::PCLVisualizer vis ("global_transform");
+    vis.setBackgroundColor(255,255,255);
+
+    for (size_t i=0; i<input_clouds.size();i++)
+    {
         pcl::PointCloud<PointT>::Ptr transformedCloud(new pcl::PointCloud<PointT>);
-        *transformedCloud = *input_clouds[i];
-        pcl_ros::transformPointCloud(*transformedCloud, *transformedCloud,registered_poses[i]);
-
+        pcl::transformPointCloud(*input_clouds[i], *transformedCloud, registered_poses[i]);
         std::stringstream ss; ss<<"Cloud";ss<<i;
-        pg->addPointCloud(transformedCloud, ss.str());
+        vis.addPointCloud(transformedCloud, ss.str());
     }
-
-    pg->spin();
-    pg->removeAllPointClouds();
+    vis.spin();
 }
